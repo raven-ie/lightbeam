@@ -1,0 +1,6 @@
+-Use small images for particles.
+-Picking can be expensive. Try to find intersection only with few objects.
+-Don't check collisions between all objects. O(n^2)
+-The textures and shaders less the better because less switching between them. (each switch is expensive)
+-Set entity visibility to false is last thing what you should do.
+-You shouldn't work with obj model files. Convert them into .mesh files.

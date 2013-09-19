@@ -1,0 +1,104 @@
+/*
+	TODO
+	1. Entities materials (ambient, diffuse, specular, shininess)
+	2. Clean.
+*/
+window.onload = function() {
+	var stats = new Stats();
+	stats.setMode(0);
+	document.body.appendChild(stats.domElement);
+	if((renderer = lightbeam.createRenderer("viewport"))) {
+		var vertexShader = "varying float lifePercentage;" +
+						   "void main() {" +
+					       "	gl_Position = projectionMatrix * modelViewMatrix * vec4(particleData.xyz, 1.0);" +
+						   "	gl_PointSize = particleSize;" +
+						   "	lifePercentage = particleData.w;" +
+						   "}",
+			fragmentShader = "varying float lifePercentage;" +
+							 "void main() {" +
+							 "	vec4 textureColor = texture2D(colorMap, gl_PointCoord);" +
+							 "	if(textureColor.a < 0.25) discard;" +
+							 "	gl_FragColor = vec4(textureColor.rgb, textureColor.a * lifePercentage);" +
+							 "}";
+		renderer.createShader("shaderParticles", vertexShader, fragmentShader, lightbeam.shader.type.particles);
+		vertexShader = "varying vec2 texcoord;" +
+					   "varying vec3 transformedNormal;" +
+					   "void main(void) {" +
+					   "	gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPosition, 1.0);" +
+					   "	texcoord = vertexTexcoord;" +
+					   "	transformedNormal = normalize(normalMatrix * vertexNormal);" +
+					   "}",
+		fragmentShader = "varying vec2 texcoord;" +
+						 "varying vec3 transformedNormal;" +
+						 "void main(void) {" +
+						 "	float directionalLight = max(dot(transformedNormal, lightDirection), 0.0);" +
+						 "	vec3 lightWeight = lightAmbient + lightDiffuse * directionalLight;" +
+						 "	vec4 textureColor = texture2D(colorMap, vec2(texcoord.s, texcoord.t));" +
+						 "	gl_FragColor = vec4(textureColor.rgb * lightWeight, textureColor.a);" +
+						 "}";
+		renderer.createShader("shaderLighting", vertexShader, fragmentShader, lightbeam.shader.type.lighting);
+		var camera = renderer.createCameraThirdPerson("camera", null, true);
+		camera.position = [75.0, 0.0, 75.0];
+		camera.angle[0] = 0.3;
+		camera.rotation[1] = 0.1;
+		camera.distance.back = 70.0;
+		camera.distance.top = 5.0;
+		var objects = [];
+		for(var i = k = 0; i < 10; ++i) {
+			for(var j = 0; j < 10; ++j) {
+				var tree = renderer.createEntity("tree" + (++k), {
+					"shader"   : "shaderLighting",
+					"model"    : "models/tree/tree.json",
+					"position" : [i * 20.0 + Math.random() * 4.0,
+								  i * j / 10.0,
+								  j * 20.0 + Math.random() * 4.0],
+					"angle"	   : [0.0, Math.random() * 360.0, 0.0],
+					"onCreate" : function() {
+						this.nodes["tree_oak"].rotation[1] = 0.1;
+					}
+				});
+				objects.push(tree);
+			}
+		}
+		var sparkles = {
+			"count"    : 10,
+			"size"     : 10.0,
+			"shader"   : "shaderParticles",
+			"texture"  : "particles/spark.png",
+			"onUpdate" : function() {
+				for(var i in this.particles) {
+					var particle = this.particles[i];
+					if(particle.timeRemaining < 0.0) {
+						particle.timeRemaining = Math.random() + 1.0;
+						particle.timeAll = particle.timeRemaining;
+						particle.position = [Math.random() * 100.0, 0.0, Math.random() * 100.0];
+					}
+					particle.position[1] -= 1.0 * renderer.time.delta;
+					particle.timeRemaining -= renderer.time.delta;
+				}
+			}
+		};
+		var emitter = renderer.createEmitter("emitter", sparkles);
+		document.getElementById("viewport").onmousedown = function(event) {
+			var w = this.width, h = this.height, mouseCoords = [];
+			if(event.offsetX !== undefined) {
+				mouseCoords[0] =  (event.offsetX - w / 2) / (w / 2);
+				mouseCoords[1] = -(event.offsetY - h / 2) / (h / 2);
+			}
+			else {
+				var x = event.pageX - this.offsetLeft,
+					y = event.pageY - this.offsetTop;
+				mouseCoords[0] =  (x - w / 2) / (w / 2);
+				mouseCoords[1] = -(y - h / 2) / (h / 2);
+			}
+			var intersection = lightbeam.collisions.ray(mouseCoords, renderer.matrix, objects);
+			if(intersection) {
+				camera.position = intersection.position;
+			}
+		};
+		renderer.frame();
+		renderer.onUpdate = function() {
+			stats.update();
+		};
+	}
+};
